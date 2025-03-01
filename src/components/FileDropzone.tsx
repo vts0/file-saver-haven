@@ -1,19 +1,25 @@
 
 import React, { useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
-import { Upload, X, FileText, Check } from 'lucide-react';
+import { Upload, X, FileText, Check, ServerOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
 interface FileDropzoneProps {
   onFileUpload: (file: File) => Promise<void>;
   className?: string;
+  isUploading?: boolean;
+  isServerOnline?: boolean;
 }
 
-const FileDropzone: React.FC<FileDropzoneProps> = ({ onFileUpload, className }) => {
+const FileDropzone: React.FC<FileDropzoneProps> = ({ 
+  onFileUpload, 
+  className, 
+  isUploading = false, 
+  isServerOnline = true 
+}) => {
   const [isDragging, setIsDragging] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -34,6 +40,7 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({ onFileUpload, className }) 
     if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
       const file = e.dataTransfer.files[0];
       setSelectedFile(file);
+      setUploadSuccess(false);
     }
   }, []);
 
@@ -41,6 +48,7 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({ onFileUpload, className }) 
     if (e.target.files && e.target.files.length > 0) {
       const file = e.target.files[0];
       setSelectedFile(file);
+      setUploadSuccess(false);
     }
   }, []);
 
@@ -59,18 +67,19 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({ onFileUpload, className }) 
   const handleUpload = useCallback(async () => {
     if (!selectedFile) return;
     
+    if (!isServerOnline) {
+      toast.error('Cannot upload: Server is offline');
+      return;
+    }
+    
     try {
-      setIsUploading(true);
       await onFileUpload(selectedFile);
       setUploadSuccess(true);
-      toast.success('File uploaded successfully');
     } catch (error) {
       console.error('Upload failed:', error);
-      toast.error('Upload failed, please try again');
-    } finally {
-      setIsUploading(false);
+      // Toast is shown in the API function
     }
-  }, [selectedFile, onFileUpload]);
+  }, [selectedFile, onFileUpload, isServerOnline]);
 
   return (
     <div className={cn(
@@ -81,11 +90,22 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({ onFileUpload, className }) 
         className={cn(
           'relative flex flex-col items-center justify-center w-full p-6 rounded-xl glass-card overflow-hidden transition-smooth',
           isDragging ? 'border-primary border-2 bg-primary/5' : 'border border-border',
+          !isServerOnline ? 'opacity-75 pointer-events-none' : ''
         )}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
+        {!isServerOnline && (
+          <div className="absolute inset-0 bg-background/50 backdrop-blur-sm flex items-center justify-center z-10">
+            <div className="flex flex-col items-center p-4 text-center">
+              <ServerOff className="w-10 h-10 text-destructive mb-2" />
+              <h3 className="text-lg font-medium">Server Offline</h3>
+              <p className="text-sm text-muted-foreground">Cannot upload files while server is offline</p>
+            </div>
+          </div>
+        )}
+        
         {!selectedFile ? (
           <>
             <Upload className="w-10 h-10 mb-4 text-primary animate-float" />
@@ -98,6 +118,7 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({ onFileUpload, className }) 
               onClick={handleClickUpload}
               className="transition-smooth"
               variant="secondary"
+              disabled={!isServerOnline}
             >
               Select File
             </Button>
@@ -106,6 +127,7 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({ onFileUpload, className }) 
               type="file"
               className="hidden"
               onChange={handleFileInputChange}
+              disabled={!isServerOnline}
             />
           </>
         ) : (
@@ -141,7 +163,7 @@ const FileDropzone: React.FC<FileDropzoneProps> = ({ onFileUpload, className }) 
               ) : (
                 <Button 
                   onClick={handleUpload} 
-                  disabled={isUploading}
+                  disabled={isUploading || !isServerOnline}
                   className="transition-smooth"
                 >
                   {isUploading ? 'Uploading...' : 'Upload'}

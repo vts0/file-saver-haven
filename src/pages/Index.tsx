@@ -10,11 +10,13 @@ import {
   downloadFile
 } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, FileText } from 'lucide-react';
+import { Upload, FileText, ServerOff } from 'lucide-react';
+import { toast } from 'sonner';
 
 const Index: React.FC = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<string>('upload');
+  const [serverOnline, setServerOnline] = useState<boolean>(true);
   
   // File upload mutation
   const uploadMutation = useMutation({
@@ -23,6 +25,11 @@ const Index: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
+      toast.success('File uploaded successfully');
+    },
+    onError: (error) => {
+      console.error('Upload mutation error:', error);
+      // Toast is already shown in the API function
     }
   });
   
@@ -33,6 +40,11 @@ const Index: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
+      toast.success('File deleted successfully');
+    },
+    onError: (error) => {
+      console.error('Delete mutation error:', error);
+      // Toast is already shown in the API function
     }
   });
   
@@ -40,19 +52,53 @@ const Index: React.FC = () => {
   const downloadMutation = useMutation({
     mutationFn: async (fileName: string) => {
       await downloadFile(fileName);
+    },
+    onSuccess: () => {
+      toast.success('File download started');
+    },
+    onError: (error) => {
+      console.error('Download mutation error:', error);
+      // Toast is already shown in the API function
     }
   });
   
   // Query to fetch files
-  const { data: files = [], refetch } = useQuery({
+  const { data: files = [], refetch, isError } = useQuery({
     queryKey: ['files'],
     queryFn: async () => {
-      return listFiles();
+      try {
+        const result = await listFiles();
+        setServerOnline(true);
+        return result;
+      } catch (error) {
+        setServerOnline(false);
+        throw error;
+      }
     },
+    // Don't retry too aggressively to avoid console spam
+    retry: 1,
+    retryDelay: 3000,
   });
   
-  // Periodically refresh the file list (every 10 seconds)
+  // Check server status on mount and periodically
   useEffect(() => {
+    const checkServer = async () => {
+      try {
+        await fetch('http://localhost:8080/api/files', { 
+          method: 'HEAD',
+          // Short timeout to avoid long waits
+          signal: AbortSignal.timeout(2000)
+        });
+        setServerOnline(true);
+      } catch (error) {
+        setServerOnline(false);
+      }
+    };
+    
+    // Initial check
+    checkServer();
+    
+    // Periodic checks
     const interval = setInterval(() => {
       refetch();
     }, 10000);
@@ -85,6 +131,16 @@ const Index: React.FC = () => {
           </p>
         </header>
         
+        {!serverOnline && (
+          <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded-md mb-6 flex items-center animate-pulse">
+            <ServerOff className="w-5 h-5 mr-2" />
+            <div>
+              <p className="font-medium">Server connection error</p>
+              <p className="text-sm">Make sure your Go server is running at http://localhost:8080</p>
+            </div>
+          </div>
+        )}
+        
         <div className="space-y-10">
           {/* File Manager Section */}
           <section id="file-manager" className="animate-fade-in">
@@ -106,7 +162,7 @@ const Index: React.FC = () => {
                 </TabsList>
                 
                 <TabsContent value="upload" className="mt-0 space-y-4 animate-fade-in">
-                  <FileDropzone onFileUpload={handleFileUpload} />
+                  <FileDropzone onFileUpload={handleFileUpload} isUploading={uploadMutation.isPending} isServerOnline={serverOnline} />
                 </TabsContent>
                 
                 <TabsContent value="list" className="mt-0 animate-fade-in">
@@ -114,6 +170,7 @@ const Index: React.FC = () => {
                     files={files}
                     onDeleteFile={handleDeleteFile}
                     onDownloadFile={handleDownloadFile}
+                    isLoading={isError && !serverOnline}
                   />
                 </TabsContent>
               </Tabs>
@@ -125,7 +182,10 @@ const Index: React.FC = () => {
       <footer className="py-6 border-t mt-12">
         <div className="container text-center text-sm text-muted-foreground">
           <p>File Storage Haven © {new Date().getFullYear()}</p>
-          <p className="mt-1">HTTP Server running at: http://localhost:8080</p>
+          <div className="mt-1 flex justify-center items-center gap-1">
+            <div className={`w-2 h-2 rounded-full ${serverOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <p>Server status: {serverOnline ? 'Online' : 'Offline'} at http://localhost:8080</p>
+          </div>
         </div>
       </footer>
     </div>
