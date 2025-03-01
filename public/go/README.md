@@ -1,31 +1,29 @@
 
 # Go File Server
 
-This is a simple Go file server that allows you to upload and manage files. The server creates a `files` directory where all uploaded files are stored.
+Это простой файловый сервер на Go, который позволяет загружать и управлять файлами. Сервер создает директорию `files`, где хранятся все загруженные файлы.
 
-## How to use
+## Как использовать
 
-1. Build the Go application:
+1. Соберите Go-приложение:
    ```
    go build -o fileserver main.go
    ```
 
-2. Run the server:
+2. Запустите сервер:
    ```
    ./fileserver
    ```
 
-3. The server will prompt you to enter a port number.
-
-4. After specifying the port, the server will start and show the URL where it's accessible.
+3. Сервер запустится на порту 8080 по адресу http://localhost:8080
 
 ## API Endpoints
 
-- `POST /api/upload` - Upload a file
-- `GET /api/files` - List all files
-- `GET /api/files/:filename` - Download a specific file
-- `DELETE /api/files/:filename` - Delete a specific file
+- `POST /api/upload` - Загрузить файл
+- `GET /api/files` - Получить список всех файлов
+- `GET /api/files/:filename` - Скачать конкретный файл
+- `DELETE /api/files/:filename` - Удалить конкретный файл
 
-## Note
+## Примечание
 
-This server implementation is meant to be a companion to the frontend React application. The server handles file storage, retrieval, and management while the React frontend provides a user-friendly interface.
+Этот сервер предназначен для работы с фронтенд-приложением на React. Сервер обрабатывает хранение, получение и управление файлами, в то время как фронтенд на React предоставляет удобный пользовательский интерфейс.
