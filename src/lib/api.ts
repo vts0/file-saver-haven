@@ -9,6 +9,8 @@ export const uploadFile = async (file: File): Promise<void> => {
     const formData = new FormData();
     formData.append('file', file);
     
+    console.log('Uploading to:', `${SERVER_URL}/api/upload`);
+    
     const response = await fetch(`${SERVER_URL}/api/upload`, {
       method: 'POST',
       body: formData,

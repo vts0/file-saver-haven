@@ -63,7 +63,7 @@ const Index: React.FC = () => {
   });
   
   // Query to fetch files
-  const { data: files = [], refetch, isError } = useQuery({
+  const { data: files = [], refetch, isLoading, isError } = useQuery({
     queryKey: ['files'],
     queryFn: async () => {
       try {
@@ -170,7 +170,7 @@ const Index: React.FC = () => {
                     files={files}
                     onDeleteFile={handleDeleteFile}
                     onDownloadFile={handleDownloadFile}
-                    isLoading={isError && !serverOnline}
+                    isLoading={isLoading || isError} 
                   />
                 </TabsContent>
               </Tabs>
