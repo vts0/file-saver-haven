@@ -1,8 +1,7 @@
-
 import { FileInfo } from '@/components/FileList';
 import { toast } from 'sonner';
 
-const SERVER_URL = 'http://localhost:8080'; // Fixed server URL
+const SERVER_URL = 'http://localhost:8080'; // Keep server URL pointing to 8080
 
 export const uploadFile = async (file: File): Promise<void> => {
   try {

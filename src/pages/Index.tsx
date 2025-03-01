@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import FileDropzone from '@/components/FileDropzone';
@@ -18,7 +17,6 @@ const Index: React.FC = () => {
   const [activeTab, setActiveTab] = useState<string>('upload');
   const [serverOnline, setServerOnline] = useState<boolean>(true);
   
-  // File upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
       await uploadFile(file);
@@ -29,11 +27,9 @@ const Index: React.FC = () => {
     },
     onError: (error) => {
       console.error('Upload mutation error:', error);
-      // Toast is already shown in the API function
     }
   });
   
-  // File delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (fileName: string) => {
       await deleteFile(fileName);
@@ -44,11 +40,9 @@ const Index: React.FC = () => {
     },
     onError: (error) => {
       console.error('Delete mutation error:', error);
-      // Toast is already shown in the API function
     }
   });
   
-  // Download file mutation
   const downloadMutation = useMutation({
     mutationFn: async (fileName: string) => {
       await downloadFile(fileName);
@@ -58,11 +52,9 @@ const Index: React.FC = () => {
     },
     onError: (error) => {
       console.error('Download mutation error:', error);
-      // Toast is already shown in the API function
     }
   });
   
-  // Query to fetch files
   const { data: files = [], refetch, isLoading, isError } = useQuery({
     queryKey: ['files'],
     queryFn: async () => {
@@ -75,18 +67,15 @@ const Index: React.FC = () => {
         throw error;
       }
     },
-    // Don't retry too aggressively to avoid console spam
     retry: 1,
     retryDelay: 3000,
   });
   
-  // Check server status on mount and periodically
   useEffect(() => {
     const checkServer = async () => {
       try {
         await fetch('http://localhost:8080/api/files', { 
           method: 'HEAD',
-          // Short timeout to avoid long waits
           signal: AbortSignal.timeout(2000)
         });
         setServerOnline(true);
@@ -95,10 +84,8 @@ const Index: React.FC = () => {
       }
     };
     
-    // Initial check
     checkServer();
     
-    // Periodic checks
     const interval = setInterval(() => {
       refetch();
     }, 10000);
@@ -106,7 +93,6 @@ const Index: React.FC = () => {
     return () => clearInterval(interval);
   }, [refetch]);
   
-  // Handlers
   const handleFileUpload = useCallback(async (file: File) => {
     await uploadMutation.mutateAsync(file);
   }, [uploadMutation]);
@@ -142,7 +128,6 @@ const Index: React.FC = () => {
         )}
         
         <div className="space-y-10">
-          {/* File Manager Section */}
           <section id="file-manager" className="animate-fade-in">
             <div className="bg-background/80 backdrop-blur-md rounded-xl border border-border p-6 shadow-sm">
               <Tabs 
@@ -170,7 +155,6 @@ const Index: React.FC = () => {
                     files={files}
                     onDeleteFile={handleDeleteFile}
                     onDownloadFile={handleDownloadFile}
-                    isLoading={isLoading || isError} 
                   />
                 </TabsContent>
               </Tabs>
