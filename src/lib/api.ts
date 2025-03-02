@@ -7,8 +7,9 @@ const BASE_URL = 'http://localhost';
 // Helper function to check if the server is running
 export const checkServerStatus = async (port: number): Promise<boolean> => {
   try {
+    // Instead of using a HEAD request, use a GET request since Go server might not have HEAD handler
     const response = await fetch(`${BASE_URL}:${port}/api/files`, {
-      method: 'HEAD', // Use HEAD request to avoid fetching all files data
+      method: 'GET', 
       // Use a short timeout to avoid long waits
       signal: AbortSignal.timeout(2000)
     });
