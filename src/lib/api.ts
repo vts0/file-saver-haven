@@ -1,6 +1,7 @@
 
 import { FileInfo } from '@/components/FileList';
-import { simulateLaunchServer } from '@/server/browser-api';
+import { invoke } from '@tauri-apps/api/tauri';
+import { Command } from '@tauri-apps/api/shell';
 
 const BASE_URL = 'http://localhost';
 
@@ -27,25 +28,34 @@ export const startServer = async (port: number): Promise<string> => {
       return `${BASE_URL}:${port}`;
     }
     
-    // Simulate launching the Go server (since we can't actually launch it from the browser)
-    await simulateLaunchServer(port);
-    
-    // Display instructions for manual server startup
-    console.log('To start the server manually, run:');
-    console.log(`cd public/go && go run main.go -port ${port}`);
-    
-    // Check if the server is running (may be manually started following instructions)
-    for (let i = 0; i < 5; i++) {
-      // Wait a bit before checking
-      await new Promise(resolve => setTimeout(resolve, 1000));
+    try {
+      // Use Tauri's Command API to start the Go server process
+      const command = Command.sidecar('go-server', ['--port', port.toString()]);
       
-      const serverRunning = await checkServerStatus(port);
-      if (serverRunning) {
-        return `${BASE_URL}:${port}`;
+      // Execute the command
+      const child = await command.spawn();
+      
+      console.log('Go server process started with ID:', child.pid);
+      
+      // Wait for the server to start
+      for (let i = 0; i < 10; i++) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const serverRunning = await checkServerStatus(port);
+        if (serverRunning) {
+          return `${BASE_URL}:${port}`;
+        }
       }
+      
+      throw new Error(`Server did not start at port ${port} within the expected time.`);
+    } catch (error) {
+      console.error('Failed to start Go server:', error);
+      
+      // Fallback: Display instructions for manual server startup
+      console.log('To start the server manually, run:');
+      console.log(`cd public/go && go run main.go -port ${port}`);
+      
+      throw new Error(`Failed to start Go server: ${error}`);
     }
-    
-    throw new Error(`Server not running at port ${port}. Please start it manually.`);
   } catch (error) {
     // Propagate the error to be handled by the caller
     throw error;
