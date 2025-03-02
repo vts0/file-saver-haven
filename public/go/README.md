@@ -1,31 +1,45 @@
 
-# Go File Server
+# File Storage Server
 
-This is a simple Go file server that allows you to upload and manage files. The server creates a `files` directory where all uploaded files are stored.
+This is a monolithic Go server that handles both the API and serves the frontend static files for the File Storage Haven application.
 
 ## How to use
 
 1. Build the Go application:
-   ```
-   go build -o fileserver main.go
+   ```bash
+   go build -o file-storage-server main.go
    ```
 
 2. Run the server:
-   ```
-   ./fileserver
+   ```bash
+   ./file-storage-server --port 8080
    ```
 
-3. The server will prompt you to enter a port number.
+   Or let the application specify the port:
+   ```bash
+   ./file-storage-server
+   ```
 
-4. After specifying the port, the server will start and show the URL where it's accessible.
+## Features
+
+- Serves the React frontend from the `/dist` directory
+- Provides API endpoints for file operations
+- Creates a `files` directory to store uploaded files
+- Handles CORS for API requests
 
 ## API Endpoints
 
+- `GET /api/status` - Check server status
 - `POST /api/upload` - Upload a file
 - `GET /api/files` - List all files
 - `GET /api/files/:filename` - Download a specific file
 - `DELETE /api/files/:filename` - Delete a specific file
 
-## Note
+## For Tauri Integration
 
-This server implementation is meant to be a companion to the frontend React application. The server handles file storage, retrieval, and management while the React frontend provides a user-friendly interface.
+When building the Tauri app:
+
+1. Build this Go server as a binary
+2. Include it as a sidecar in your Tauri configuration
+3. The React frontend will communicate with the server through localhost
+

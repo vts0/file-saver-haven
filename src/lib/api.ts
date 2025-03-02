@@ -1,4 +1,3 @@
-
 import { FileInfo } from '@/components/FileList';
 import { invoke } from '@tauri-apps/api/tauri';
 import { Command } from '@tauri-apps/api/shell';
@@ -8,8 +7,8 @@ const BASE_URL = 'http://localhost';
 // Helper function to check if the server is running
 export const checkServerStatus = async (port: number): Promise<boolean> => {
   try {
-    // Instead of using a HEAD request, use a GET request since Go server might not have HEAD handler
-    const response = await fetch(`${BASE_URL}:${port}/api/files`, {
+    // Use a GET request to the status endpoint
+    const response = await fetch(`${BASE_URL}:${port}/api/status`, {
       method: 'GET', 
       // Use a short timeout to avoid long waits
       signal: AbortSignal.timeout(2000)
@@ -29,8 +28,9 @@ export const startServer = async (port: number): Promise<string> => {
     }
     
     try {
-      // Use Tauri's Command API to start the Go server process
-      const command = Command.sidecar('go-server', ['--port', port.toString()]);
+      // Use Tauri's Command API to start the Go server
+      // In a monolithic approach, we'll use a built Go binary
+      const command = Command.sidecar('file-storage-server', ['--port', port.toString()]);
       
       // Execute the command
       const child = await command.spawn();
@@ -38,7 +38,7 @@ export const startServer = async (port: number): Promise<string> => {
       console.log('Go server process started with ID:', child.pid);
       
       // Wait for the server to start
-      for (let i = 0; i < 10; i++) {
+      for (let i = 0; i < 15; i++) {
         await new Promise(resolve => setTimeout(resolve, 500));
         const serverRunning = await checkServerStatus(port);
         if (serverRunning) {
@@ -48,13 +48,13 @@ export const startServer = async (port: number): Promise<string> => {
       
       throw new Error(`Server did not start at port ${port} within the expected time.`);
     } catch (error) {
-      console.error('Failed to start Go server:', error);
+      console.error('Failed to start server:', error);
       
       // Fallback: Display instructions for manual server startup
       console.log('To start the server manually, run:');
-      console.log(`cd public/go && go run main.go -port ${port}`);
+      console.log(`cd public/go && go build -o file-storage-server main.go && ./file-storage-server -port ${port}`);
       
-      throw new Error(`Failed to start Go server: ${error}`);
+      throw new Error(`Failed to start server: ${error}`);
     }
   } catch (error) {
     // Propagate the error to be handled by the caller
@@ -62,6 +62,7 @@ export const startServer = async (port: number): Promise<string> => {
   }
 };
 
+// The rest of the API functions remain the same as they now communicate with the monolithic server
 export const uploadFile = async (file: File, serverUrl: string): Promise<void> => {
   // Upload file to Go server
   const formData = new FormData();
@@ -88,12 +89,6 @@ export const listFiles = async (serverUrl: string): Promise<FileInfo[]> => {
     return await response.json();
   } catch (error) {
     console.error('List files error:', error);
-    
-    // For demonstration, if the server is not available, return simulated files from localStorage
-    const storedFiles = localStorage.getItem('files');
-    if (storedFiles) {
-      return JSON.parse(storedFiles);
-    }
     return [];
   }
 };
@@ -122,27 +117,4 @@ export const downloadFile = async (fileName: string, serverUrl: string): Promise
   a.download = fileName;
   a.click();
   window.URL.revokeObjectURL(url);
-};
-
-// Helper function to save a file to localStorage (for demo purposes)
-export const saveFileToLocalStorage = (file: File): void => {
-  const storedFiles = localStorage.getItem('files');
-  const files = storedFiles ? JSON.parse(storedFiles) as FileInfo[] : [];
-  
-  // Check if file already exists
-  const existingIndex = files.findIndex(f => f.name === file.name);
-  
-  const newFile: FileInfo = {
-    name: file.name,
-    size: file.size,
-    uploadDate: new Date().toISOString(),
-  };
-  
-  if (existingIndex >= 0) {
-    files[existingIndex] = newFile;
-  } else {
-    files.push(newFile);
-  }
-  
-  localStorage.setItem('files', JSON.stringify(files));
 };

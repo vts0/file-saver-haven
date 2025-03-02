@@ -21,13 +21,8 @@ type FileInfo struct {
 
 func main() {
 	var port int
-	flag.IntVar(&port, "port", 0, "Port to run the server on")
+	flag.IntVar(&port, "port", 8080, "Port to run the server on")
 	flag.Parse()
-
-	if port == 0 {
-		fmt.Print("Enter port to start HTTP server: ")
-		fmt.Scanf("%d", &port)
-	}
 
 	// Ensure the files directory exists
 	if err := os.MkdirAll("files", os.ModePerm); err != nil {
@@ -53,6 +48,8 @@ func main() {
 	// Create a new router
 	mux := http.NewServeMux()
 
+	// API Routes
+	
 	// Upload file endpoint
 	mux.HandleFunc("/api/upload", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
@@ -96,15 +93,9 @@ func main() {
 		fmt.Fprintf(w, "File uploaded successfully: %s", handler.Filename)
 	})
 
-	// List files endpoint - handles both GET and HEAD requests
+	// List files endpoint
 	mux.HandleFunc("/api/files", func(w http.ResponseWriter, r *http.Request) {
-		// Allow HEAD requests for server status checks
-		if r.Method == "HEAD" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		
-		if r.Method != "GET" && r.Method != "HEAD" {
+		if r.Method != "GET" {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -112,11 +103,6 @@ func main() {
 		files, err := os.ReadDir("files")
 		if err != nil {
 			http.Error(w, "Failed to read files directory", http.StatusInternalServerError)
-			return
-		}
-
-		// For HEAD requests, we've already set the status code
-		if r.Method == "HEAD" {
 			return
 		}
 
@@ -148,40 +134,19 @@ func main() {
 
 	// File operations endpoint (download/delete)
 	mux.HandleFunc("/api/files/", func(w http.ResponseWriter, r *http.Request) {
-		// Allow HEAD requests for file checks
-		if r.Method == "HEAD" {
-			fileName := r.URL.Path[len("/api/files/"):]
-			if fileName == "" {
-				http.Error(w, "Filename not provided", http.StatusBadRequest)
-				return
-			}
-			
-			filePath := filepath.Join("files", filepath.Clean(fileName))
-			if !filepath.IsAbs(filePath) {
-				filePath = filepath.Join(".", filePath)
-			}
-			
-			if _, err := os.Stat(filePath); os.IsNotExist(err) {
-				http.Error(w, "File not found", http.StatusNotFound)
-				return
-			}
-			
-			w.WriteHeader(http.StatusOK)
+		fileName := r.URL.Path[len("/api/files/"):]
+		if fileName == "" {
+			http.Error(w, "Filename not provided", http.StatusBadRequest)
 			return
-		} else if r.Method == "GET" {
-			// Extract the filename from the URL
-			fileName := r.URL.Path[len("/api/files/"):]
-			if fileName == "" {
-				http.Error(w, "Filename not provided", http.StatusBadRequest)
-				return
-			}
+		}
 
-			// Ensure the file path is within the files directory
-			filePath := filepath.Join("files", filepath.Clean(fileName))
-			if !filepath.IsAbs(filePath) {
-				filePath = filepath.Join(".", filePath)
-			}
+		// Ensure the file path is within the files directory
+		filePath := filepath.Join("files", filepath.Clean(fileName))
+		if !filepath.IsAbs(filePath) {
+			filePath = filepath.Join(".", filePath)
+		}
 
+		if r.Method == "GET" {
 			// Check if the file exists
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				http.Error(w, "File not found", http.StatusNotFound)
@@ -192,19 +157,6 @@ func main() {
 			http.ServeFile(w, r, filePath)
 			return
 		} else if r.Method == "DELETE" {
-			// Extract the filename from the URL
-			fileName := r.URL.Path[len("/api/files/"):]
-			if fileName == "" {
-				http.Error(w, "Filename not provided", http.StatusBadRequest)
-				return
-			}
-
-			// Ensure the file path is within the files directory
-			filePath := filepath.Join("files", filepath.Clean(fileName))
-			if !filepath.IsAbs(filePath) {
-				filePath = filepath.Join(".", filePath)
-			}
-
 			// Check if the file exists
 			if _, err := os.Stat(filePath); os.IsNotExist(err) {
 				http.Error(w, "File not found", http.StatusNotFound)
@@ -226,6 +178,28 @@ func main() {
 		}
 	})
 
+	// Status endpoint for health check
+	mux.HandleFunc("/api/status", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"status": "running",
+			"time":   time.Now().Format(time.RFC3339),
+		})
+	})
+
+	// Static file server for the frontend build files
+	// This will serve the frontend as a single page application
+	// For Tauri app, we'll serve it from the dist directory
+	fs := http.FileServer(http.Dir("../dist"))
+	mux.Handle("/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// If path doesn't exist and is not an API route, serve index.html
+		path := r.URL.Path
+		if path != "/" && !fileExists("../dist"+path) && !isAPIRoute(path) {
+			r.URL.Path = "/"
+		}
+		fs.ServeHTTP(w, r)
+	}))
+
 	// Create the server with CORS middleware
 	server := &http.Server{
 		Addr:    fmt.Sprintf(":%d", port),
@@ -234,9 +208,20 @@ func main() {
 
 	// Start the server
 	serverAddr := fmt.Sprintf("http://localhost:%d", port)
-	fmt.Printf("Server running at: %s\n", serverAddr)
+	log.Printf("Server running at: %s\n", serverAddr)
 	
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
+}
+
+// Helper function to check if a file exists
+func fileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return !os.IsNotExist(err)
+}
+
+// Helper function to check if a path is an API route
+func isAPIRoute(path string) bool {
+	return len(path) >= 4 && path[:4] == "/api"
 }
