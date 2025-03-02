@@ -1,5 +1,6 @@
 
 import { FileInfo } from '@/components/FileList';
+import { simulateLaunchServer } from '@/server/browser-api';
 
 const BASE_URL = 'http://localhost';
 
@@ -7,7 +8,7 @@ const BASE_URL = 'http://localhost';
 export const checkServerStatus = async (port: number): Promise<boolean> => {
   try {
     const response = await fetch(`${BASE_URL}:${port}/api/files`, {
-      method: 'GET',
+      method: 'HEAD', // Use HEAD request to avoid fetching all files data
       // Use a short timeout to avoid long waits
       signal: AbortSignal.timeout(2000)
     });
@@ -19,21 +20,31 @@ export const checkServerStatus = async (port: number): Promise<boolean> => {
 
 export const startServer = async (port: number): Promise<string> => {
   try {
-    // Attempt to launch the Go server via exec or spawn
-    // This is a frontend simulation for now since we can't directly launch Go from the browser
+    // First check if the server is already running
+    const isRunning = await checkServerStatus(port);
+    if (isRunning) {
+      return `${BASE_URL}:${port}`;
+    }
     
-    // For demonstration, we'll display a message about how to start the server manually
+    // Simulate launching the Go server (since we can't actually launch it from the browser)
+    await simulateLaunchServer(port);
+    
+    // Display instructions for manual server startup
     console.log('To start the server manually, run:');
     console.log(`cd public/go && go run main.go -port ${port}`);
     
-    // Check if the server is already running
-    const isRunning = await checkServerStatus(port);
-    if (!isRunning) {
-      throw new Error(`Server not running at port ${port}. Please start it manually.`);
+    // Check if the server is running (may be manually started following instructions)
+    for (let i = 0; i < 5; i++) {
+      // Wait a bit before checking
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      const serverRunning = await checkServerStatus(port);
+      if (serverRunning) {
+        return `${BASE_URL}:${port}`;
+      }
     }
     
-    // Return the server URL if running
-    return `${BASE_URL}:${port}`;
+    throw new Error(`Server not running at port ${port}. Please start it manually.`);
   } catch (error) {
     // Propagate the error to be handled by the caller
     throw error;

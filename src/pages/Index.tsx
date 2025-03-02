@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import FileDropzone from '@/components/FileDropzone';
@@ -104,7 +103,7 @@ const Index: React.FC = () => {
   });
   
   // Query to fetch files
-  const { data: files = [], isLoading } = useQuery({
+  const { data: files = [] } = useQuery({
     queryKey: ['files'],
     queryFn: async () => {
       if (!serverUrl) return [];
