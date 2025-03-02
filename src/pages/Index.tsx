@@ -10,23 +10,50 @@ import {
   listFiles, 
   deleteFile, 
   downloadFile,
-  saveFileToLocalStorage
+  saveFileToLocalStorage,
+  checkServerStatus
 } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Upload, FileText } from 'lucide-react';
+import { toast } from 'sonner';
 
 const Index: React.FC = () => {
   const queryClient = useQueryClient();
   const [serverUrl, setServerUrl] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('upload');
+  const [isServerChecking, setIsServerChecking] = useState<boolean>(true);
+  
+  // Check if server is already running on load
+  useEffect(() => {
+    const checkServer = async () => {
+      try {
+        setIsServerChecking(true);
+        const isRunning = await checkServerStatus(8080);
+        if (isRunning) {
+          setServerUrl('http://localhost:8080');
+          queryClient.invalidateQueries({ queryKey: ['files'] });
+        }
+      } catch (error) {
+        console.error('Server check error:', error);
+      } finally {
+        setIsServerChecking(false);
+      }
+    };
+    
+    checkServer();
+  }, [queryClient]);
   
   // Server start mutation
   const serverStartMutation = useMutation({
     mutationFn: startServer,
     onSuccess: (url) => {
       setServerUrl(url);
+      toast.success('Server started successfully');
       // Trigger files fetch when server starts
       queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Server start failed: ${error.message}`);
     }
   });
   
@@ -39,7 +66,11 @@ const Index: React.FC = () => {
       saveFileToLocalStorage(file);
     },
     onSuccess: () => {
+      toast.success('File uploaded successfully');
       queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Upload failed: ${error.message}`);
     }
   });
   
@@ -50,7 +81,11 @@ const Index: React.FC = () => {
       await deleteFile(fileName, serverUrl);
     },
     onSuccess: () => {
+      toast.success('File deleted successfully');
       queryClient.invalidateQueries({ queryKey: ['files'] });
+    },
+    onError: (error: any) => {
+      toast.error(`Delete failed: ${error.message}`);
     }
   });
   
@@ -59,33 +94,34 @@ const Index: React.FC = () => {
     mutationFn: async (fileName: string) => {
       if (!serverUrl) throw new Error('Server not started');
       await downloadFile(fileName, serverUrl);
+    },
+    onSuccess: () => {
+      toast.success('File downloaded successfully');
+    },
+    onError: (error: any) => {
+      toast.error(`Download failed: ${error.message}`);
     }
   });
   
   // Query to fetch files
-  const { data: files = [], refetch } = useQuery({
+  const { data: files = [], isLoading } = useQuery({
     queryKey: ['files'],
     queryFn: async () => {
       if (!serverUrl) return [];
       return listFiles(serverUrl);
     },
     enabled: !!serverUrl,
+    refetchInterval: 10000, // Refresh every 10 seconds
   });
-  
-  // Periodically refresh the file list (every 10 seconds)
-  useEffect(() => {
-    if (!serverUrl) return;
-    
-    const interval = setInterval(() => {
-      refetch();
-    }, 10000);
-    
-    return () => clearInterval(interval);
-  }, [serverUrl, refetch]);
   
   // Handlers
   const handleServerStart = useCallback(async (port: number) => {
-    return serverStartMutation.mutateAsync(port);
+    try {
+      return await serverStartMutation.mutateAsync(port);
+    } catch (error) {
+      // Error is already handled in the onError callback
+      throw error;
+    }
   }, [serverStartMutation]);
   
   const handleFileUpload = useCallback(async (file: File) => {
@@ -113,15 +149,25 @@ const Index: React.FC = () => {
         </header>
         
         <div className="space-y-10">
-          {/* Server Configuration Section */}
-          <section className="animate-fade-in">
-            <ServerConfig 
-              onServerStart={handleServerStart} 
-              className="max-w-xl mx-auto"
-            />
-          </section>
+          {/* Server Configuration Section - Show when server is not running */}
+          {!serverUrl && !isServerChecking && (
+            <section className="animate-fade-in">
+              <ServerConfig 
+                onServerStart={handleServerStart} 
+                className="max-w-xl mx-auto"
+              />
+            </section>
+          )}
           
-          {/* File Manager Section */}
+          {/* Loading state while checking server */}
+          {isServerChecking && (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+              <span className="ml-3">Checking server status...</span>
+            </div>
+          )}
+          
+          {/* File Manager Section - Only show when server is running */}
           {serverUrl && (
             <section id="file-manager" className="animate-fade-in">
               <div className="bg-background/80 backdrop-blur-md rounded-xl border border-border p-6 shadow-sm">

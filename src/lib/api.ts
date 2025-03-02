@@ -3,77 +3,103 @@ import { FileInfo } from '@/components/FileList';
 
 const BASE_URL = 'http://localhost';
 
+// Helper function to check if the server is running
+export const checkServerStatus = async (port: number): Promise<boolean> => {
+  try {
+    const response = await fetch(`${BASE_URL}:${port}/api/files`, {
+      method: 'GET',
+      // Use a short timeout to avoid long waits
+      signal: AbortSignal.timeout(2000)
+    });
+    return response.ok;
+  } catch (error) {
+    return false;
+  }
+};
+
 export const startServer = async (port: number): Promise<string> => {
-  // This is a frontend simulation of starting a Go server
-  // In a real application, this would make an API call to start the backend server
-  
-  // Simulate server startup delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  
-  // In a real application, the Go server would return its URL
-  return `${BASE_URL}:${port}`;
+  try {
+    // Attempt to launch the Go server via exec or spawn
+    // This is a frontend simulation for now since we can't directly launch Go from the browser
+    
+    // For demonstration, we'll display a message about how to start the server manually
+    console.log('To start the server manually, run:');
+    console.log(`cd public/go && go run main.go -port ${port}`);
+    
+    // Check if the server is already running
+    const isRunning = await checkServerStatus(port);
+    if (!isRunning) {
+      throw new Error(`Server not running at port ${port}. Please start it manually.`);
+    }
+    
+    // Return the server URL if running
+    return `${BASE_URL}:${port}`;
+  } catch (error) {
+    // Propagate the error to be handled by the caller
+    throw error;
+  }
 };
 
 export const uploadFile = async (file: File, serverUrl: string): Promise<void> => {
-  // Simulate file upload to Go server
+  // Upload file to Go server
   const formData = new FormData();
   formData.append('file', file);
   
-  // In a real application, this would be an actual fetch request
-  // await fetch(`${serverUrl}/api/upload`, {
-  //   method: 'POST',
-  //   body: formData,
-  // });
+  const response = await fetch(`${serverUrl}/api/upload`, {
+    method: 'POST',
+    body: formData,
+  });
   
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  if (!response.ok) {
+    throw new Error(`Failed to upload file: ${response.statusText}`);
+  }
 };
 
 export const listFiles = async (serverUrl: string): Promise<FileInfo[]> => {
-  // In a real application, this would fetch the file list from the Go server
-  // const response = await fetch(`${serverUrl}/api/files`);
-  // return await response.json();
-  
-  // For demonstration, return simulated files based on localStorage
-  const storedFiles = localStorage.getItem('files');
-  if (storedFiles) {
-    return JSON.parse(storedFiles);
+  try {
+    const response = await fetch(`${serverUrl}/api/files`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to list files: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    console.error('List files error:', error);
+    
+    // For demonstration, if the server is not available, return simulated files from localStorage
+    const storedFiles = localStorage.getItem('files');
+    if (storedFiles) {
+      return JSON.parse(storedFiles);
+    }
+    return [];
   }
-  return [];
 };
 
 export const deleteFile = async (fileName: string, serverUrl: string): Promise<void> => {
-  // In a real application, this would delete the file via the Go server
-  // await fetch(`${serverUrl}/api/files/${encodeURIComponent(fileName)}`, {
-  //   method: 'DELETE',
-  // });
+  const response = await fetch(`${serverUrl}/api/files/${encodeURIComponent(fileName)}`, {
+    method: 'DELETE',
+  });
   
-  // For demonstration, update localStorage
-  const storedFiles = localStorage.getItem('files');
-  if (storedFiles) {
-    const files = JSON.parse(storedFiles) as FileInfo[];
-    const updatedFiles = files.filter(file => file.name !== fileName);
-    localStorage.setItem('files', JSON.stringify(updatedFiles));
+  if (!response.ok) {
+    throw new Error(`Failed to delete file: ${response.statusText}`);
   }
-  
-  // Simulate network delay
-  await new Promise(resolve => setTimeout(resolve, 500));
 };
 
 export const downloadFile = async (fileName: string, serverUrl: string): Promise<void> => {
-  // In a real application, this would download the file from the Go server
-  // const response = await fetch(`${serverUrl}/api/files/${encodeURIComponent(fileName)}`);
-  // const blob = await response.blob();
-  // const url = window.URL.createObjectURL(blob);
-  // const a = document.createElement('a');
-  // a.href = url;
-  // a.download = fileName;
-  // a.click();
-  // window.URL.revokeObjectURL(url);
+  const response = await fetch(`${serverUrl}/api/files/${encodeURIComponent(fileName)}`);
   
-  // For demonstration, just simulate a download
-  console.log(`Downloading ${fileName}`);
-  await new Promise(resolve => setTimeout(resolve, 800));
+  if (!response.ok) {
+    throw new Error(`Failed to download file: ${response.statusText}`);
+  }
+  
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  a.click();
+  window.URL.revokeObjectURL(url);
 };
 
 // Helper function to save a file to localStorage (for demo purposes)

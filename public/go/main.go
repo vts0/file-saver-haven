@@ -38,7 +38,7 @@ func main() {
 	corsMiddleware := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			
 			if r.Method == "OPTIONS" {
@@ -96,9 +96,15 @@ func main() {
 		fmt.Fprintf(w, "File uploaded successfully: %s", handler.Filename)
 	})
 
-	// List files endpoint
+	// List files endpoint - handles both GET and HEAD requests
 	mux.HandleFunc("/api/files", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "GET" {
+		// Allow HEAD requests for server status checks
+		if r.Method == "HEAD" {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		
+		if r.Method != "GET" && r.Method != "HEAD" {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -106,6 +112,11 @@ func main() {
 		files, err := os.ReadDir("files")
 		if err != nil {
 			http.Error(w, "Failed to read files directory", http.StatusInternalServerError)
+			return
+		}
+
+		// For HEAD requests, we've already set the status code
+		if r.Method == "HEAD" {
 			return
 		}
 
@@ -135,9 +146,29 @@ func main() {
 		}
 	})
 
-	// Download file endpoint
+	// File operations endpoint (download/delete)
 	mux.HandleFunc("/api/files/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+		// Allow HEAD requests for file checks
+		if r.Method == "HEAD" {
+			fileName := r.URL.Path[len("/api/files/"):]
+			if fileName == "" {
+				http.Error(w, "Filename not provided", http.StatusBadRequest)
+				return
+			}
+			
+			filePath := filepath.Join("files", filepath.Clean(fileName))
+			if !filepath.IsAbs(filePath) {
+				filePath = filepath.Join(".", filePath)
+			}
+			
+			if _, err := os.Stat(filePath); os.IsNotExist(err) {
+				http.Error(w, "File not found", http.StatusNotFound)
+				return
+			}
+			
+			w.WriteHeader(http.StatusOK)
+			return
+		} else if r.Method == "GET" {
 			// Extract the filename from the URL
 			fileName := r.URL.Path[len("/api/files/"):]
 			if fileName == "" {
