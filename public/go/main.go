@@ -3,6 +3,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -19,8 +20,14 @@ type FileInfo struct {
 }
 
 func main() {
-	// Фиксированный порт 8080
-	port := 8080
+	var port int
+	flag.IntVar(&port, "port", 0, "Port to run the server on")
+	flag.Parse()
+
+	if port == 0 {
+		fmt.Print("Enter port to start HTTP server: ")
+		fmt.Scanf("%d", &port)
+	}
 
 	// Ensure the files directory exists
 	if err := os.MkdirAll("files", os.ModePerm); err != nil {

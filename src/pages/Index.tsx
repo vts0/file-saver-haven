@@ -1,97 +1,92 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQueryClient, useQuery, useMutation } from '@tanstack/react-query';
 import FileDropzone from '@/components/FileDropzone';
 import FileList, { FileInfo } from '@/components/FileList';
+import ServerConfig from '@/components/ServerConfig';
 import { 
+  startServer, 
   uploadFile, 
   listFiles, 
   deleteFile, 
-  downloadFile
+  downloadFile,
+  saveFileToLocalStorage
 } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Upload, FileText, ServerOff } from 'lucide-react';
-import { toast } from 'sonner';
+import { Upload, FileText } from 'lucide-react';
 
 const Index: React.FC = () => {
   const queryClient = useQueryClient();
+  const [serverUrl, setServerUrl] = useState<string>('');
   const [activeTab, setActiveTab] = useState<string>('upload');
-  const [serverOnline, setServerOnline] = useState<boolean>(true);
   
+  // Server start mutation
+  const serverStartMutation = useMutation({
+    mutationFn: startServer,
+    onSuccess: (url) => {
+      setServerUrl(url);
+      // Trigger files fetch when server starts
+      queryClient.invalidateQueries({ queryKey: ['files'] });
+    }
+  });
+  
+  // File upload mutation
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => {
-      await uploadFile(file);
+      if (!serverUrl) throw new Error('Server not started');
+      await uploadFile(file, serverUrl);
+      // For demo purposes, save to localStorage
+      saveFileToLocalStorage(file);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
-      toast.success('File uploaded successfully');
-    },
-    onError: (error) => {
-      console.error('Upload mutation error:', error);
     }
   });
   
+  // File delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (fileName: string) => {
-      await deleteFile(fileName);
+      if (!serverUrl) throw new Error('Server not started');
+      await deleteFile(fileName, serverUrl);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
-      toast.success('File deleted successfully');
-    },
-    onError: (error) => {
-      console.error('Delete mutation error:', error);
     }
   });
   
+  // Download file mutation
   const downloadMutation = useMutation({
     mutationFn: async (fileName: string) => {
-      await downloadFile(fileName);
-    },
-    onSuccess: () => {
-      toast.success('File download started');
-    },
-    onError: (error) => {
-      console.error('Download mutation error:', error);
+      if (!serverUrl) throw new Error('Server not started');
+      await downloadFile(fileName, serverUrl);
     }
   });
   
-  const { data: files = [], refetch, isLoading, isError } = useQuery({
+  // Query to fetch files
+  const { data: files = [], refetch } = useQuery({
     queryKey: ['files'],
     queryFn: async () => {
-      try {
-        const result = await listFiles();
-        setServerOnline(true);
-        return result;
-      } catch (error) {
-        setServerOnline(false);
-        throw error;
-      }
+      if (!serverUrl) return [];
+      return listFiles(serverUrl);
     },
-    retry: 1,
-    retryDelay: 3000,
+    enabled: !!serverUrl,
   });
   
+  // Periodically refresh the file list (every 10 seconds)
   useEffect(() => {
-    const checkServer = async () => {
-      try {
-        await fetch('http://localhost:8080/api/files', { 
-          method: 'HEAD',
-          signal: AbortSignal.timeout(2000)
-        });
-        setServerOnline(true);
-      } catch (error) {
-        setServerOnline(false);
-      }
-    };
-    
-    checkServer();
+    if (!serverUrl) return;
     
     const interval = setInterval(() => {
       refetch();
     }, 10000);
     
     return () => clearInterval(interval);
-  }, [refetch]);
+  }, [serverUrl, refetch]);
+  
+  // Handlers
+  const handleServerStart = useCallback(async (port: number) => {
+    return serverStartMutation.mutateAsync(port);
+  }, [serverStartMutation]);
   
   const handleFileUpload = useCallback(async (file: File) => {
     await uploadMutation.mutateAsync(file);
@@ -117,59 +112,56 @@ const Index: React.FC = () => {
           </p>
         </header>
         
-        {!serverOnline && (
-          <div className="bg-destructive/10 border border-destructive text-destructive px-4 py-3 rounded-md mb-6 flex items-center animate-pulse">
-            <ServerOff className="w-5 h-5 mr-2" />
-            <div>
-              <p className="font-medium">Server connection error</p>
-              <p className="text-sm">Make sure your Go server is running at http://localhost:8080</p>
-            </div>
-          </div>
-        )}
-        
         <div className="space-y-10">
-          <section id="file-manager" className="animate-fade-in">
-            <div className="bg-background/80 backdrop-blur-md rounded-xl border border-border p-6 shadow-sm">
-              <Tabs 
-                value={activeTab} 
-                onValueChange={setActiveTab}
-                className="w-full"
-              >
-                <TabsList className="grid w-full grid-cols-2 mb-6">
-                  <TabsTrigger value="upload" className="flex items-center gap-2">
-                    <Upload className="w-4 h-4" />
-                    Upload File
-                  </TabsTrigger>
-                  <TabsTrigger value="list" className="flex items-center gap-2">
-                    <FileText className="w-4 h-4" />
-                    File List {files.length > 0 && `(${files.length})`}
-                  </TabsTrigger>
-                </TabsList>
-                
-                <TabsContent value="upload" className="mt-0 space-y-4 animate-fade-in">
-                  <FileDropzone onFileUpload={handleFileUpload} isUploading={uploadMutation.isPending} isServerOnline={serverOnline} />
-                </TabsContent>
-                
-                <TabsContent value="list" className="mt-0 animate-fade-in">
-                  <FileList 
-                    files={files}
-                    onDeleteFile={handleDeleteFile}
-                    onDownloadFile={handleDownloadFile}
-                  />
-                </TabsContent>
-              </Tabs>
-            </div>
+          {/* Server Configuration Section */}
+          <section className="animate-fade-in">
+            <ServerConfig 
+              onServerStart={handleServerStart} 
+              className="max-w-xl mx-auto"
+            />
           </section>
+          
+          {/* File Manager Section */}
+          {serverUrl && (
+            <section id="file-manager" className="animate-fade-in">
+              <div className="bg-background/80 backdrop-blur-md rounded-xl border border-border p-6 shadow-sm">
+                <Tabs 
+                  value={activeTab} 
+                  onValueChange={setActiveTab}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2 mb-6">
+                    <TabsTrigger value="upload" className="flex items-center gap-2">
+                      <Upload className="w-4 h-4" />
+                      Upload File
+                    </TabsTrigger>
+                    <TabsTrigger value="list" className="flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      File List {files.length > 0 && `(${files.length})`}
+                    </TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="upload" className="mt-0 space-y-4 animate-fade-in">
+                    <FileDropzone onFileUpload={handleFileUpload} />
+                  </TabsContent>
+                  
+                  <TabsContent value="list" className="mt-0 animate-fade-in">
+                    <FileList 
+                      files={files}
+                      onDeleteFile={handleDeleteFile}
+                      onDownloadFile={handleDownloadFile}
+                    />
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </section>
+          )}
         </div>
       </div>
       
       <footer className="py-6 border-t mt-12">
         <div className="container text-center text-sm text-muted-foreground">
           <p>File Storage Haven © {new Date().getFullYear()}</p>
-          <div className="mt-1 flex justify-center items-center gap-1">
-            <div className={`w-2 h-2 rounded-full ${serverOnline ? 'bg-green-500' : 'bg-red-500'}`}></div>
-            <p>Server status: {serverOnline ? 'Online' : 'Offline'} at http://localhost:8080</p>
-          </div>
         </div>
       </footer>
     </div>
